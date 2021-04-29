@@ -29,7 +29,6 @@
 #ifndef gif_h
 #define gif_h
 
-#include <stdio.h>   // for FILE*
 #include <string.h>  // for memcpy and bzero
 #include <stdint.h>  // for integer typedefs
 #include <stdbool.h> // for bool macros
@@ -59,6 +58,8 @@
 #include <stdlib.h>
 #define GIF_FREE free
 #endif
+
+#include "helper.h"
 
 const int kGifTransIndex = 0;
 
@@ -556,7 +557,7 @@ void GifWriteBit( GifBitStatus* stat, uint32_t bit )
 }
 
 // write all bytes so far to the file
-void GifWriteChunk( FILE* f, GifBitStatus* stat )
+void GifWriteChunk(std::stringbuf &f, GifBitStatus* stat )
 {
     fputc((int)stat->chunkIndex, f);
     fwrite(stat->chunk, 1, stat->chunkIndex, f);
@@ -566,7 +567,7 @@ void GifWriteChunk( FILE* f, GifBitStatus* stat )
     stat->chunkIndex = 0;
 }
 
-void GifWriteCode( FILE* f, GifBitStatus* stat, uint32_t code, uint32_t length )
+void GifWriteCode(std::stringbuf &f, GifBitStatus* stat, uint32_t code, uint32_t length )
 {
     for( uint32_t ii=0; ii<length; ++ii )
     {
@@ -588,7 +589,7 @@ typedef struct
 } GifLzwNode;
 
 // write a 256-color (8-bit) image palette to the file
-void GifWritePalette( const GifPalette* pPal, FILE* f )
+void GifWritePalette( const GifPalette* pPal, std::stringbuf& f)
 {
     fputc(0, f);  // first color: transparency
     fputc(0, f);
@@ -607,7 +608,7 @@ void GifWritePalette( const GifPalette* pPal, FILE* f )
 }
 
 // write the image header, LZW-compress and write out the image
-void GifWriteLzwImage(FILE* f, uint8_t* image, uint32_t left, uint32_t top,  uint32_t width, uint32_t height, uint32_t delay, GifPalette* pPal)
+void GifWriteLzwImage(std::stringbuf &f, uint8_t* image, uint32_t left, uint32_t top,  uint32_t width, uint32_t height, uint32_t delay, GifPalette* pPal)
 {
     // graphics control extension
     fputc(0x21, f);
@@ -727,7 +728,7 @@ void GifWriteLzwImage(FILE* f, uint8_t* image, uint32_t left, uint32_t top,  uin
 
 typedef struct
 {
-    FILE* f;
+    std::stringbuf f{};
     uint8_t* oldImage;
     bool firstFrame;
 } GifWriter;
@@ -738,13 +739,6 @@ typedef struct
 bool GifBegin( GifWriter* writer, const char* filename, uint32_t width, uint32_t height, uint32_t delay, int32_t bitDepth = 8, bool dither = false )
 {
     (void)bitDepth; (void)dither; // Mute "Unused argument" warnings
-#if defined(_MSC_VER) && (_MSC_VER >= 1400)
-	writer->f = 0;
-    fopen_s(&writer->f, filename, "wb");
-#else
-    writer->f = fopen(filename, "wb");
-#endif
-    if(!writer->f) return false;
 
     writer->firstFrame = true;
 
@@ -798,8 +792,6 @@ bool GifBegin( GifWriter* writer, const char* filename, uint32_t width, uint32_t
 // this may be handy to save bits in animations that don't change much.
 bool GifWriteFrame( GifWriter* writer, const uint8_t* image, uint32_t width, uint32_t height, uint32_t delay, int bitDepth = 8, bool dither = false )
 {
-    if(!writer->f) return false;
-
     const uint8_t* oldImage = writer->firstFrame? NULL : writer->oldImage;
     writer->firstFrame = false;
 
@@ -821,13 +813,9 @@ bool GifWriteFrame( GifWriter* writer, const uint8_t* image, uint32_t width, uin
 // but it's still a good idea to write it out.
 bool GifEnd( GifWriter* writer )
 {
-    if(!writer->f) return false;
-
     fputc(0x3b, writer->f); // end of file
-    fclose(writer->f);
     GIF_FREE(writer->oldImage);
 
-    writer->f = NULL;
     writer->oldImage = NULL;
 
     return true;
