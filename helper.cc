@@ -5,7 +5,7 @@
 #include "helper.h"
 
 int gif::fputs(const char *string, std::stringbuf &buffer) {
-  auto stringLength = (std::streamsize) (strlen(string) - 1);
+  auto stringLength = (std::streamsize) strlen(string);
   buffer.sputn(string, stringLength);
   return 1;
 }
